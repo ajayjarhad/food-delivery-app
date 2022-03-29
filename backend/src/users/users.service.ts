@@ -5,11 +5,17 @@ import { Repository } from 'typeorm';
 import { CreateAccountInput } from './dtos/create-account';
 import { Users } from './entities/users.entity';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from 'src/jwt/jwt.service';
+import { EditProfileInput } from './dtos/edit-profile.dto';
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(Users)
     private readonly users: Repository<Users>,
+    private readonly config: ConfigService,
+    private readonly jwtService: JwtService,
   ) {}
 
   async createAccount({
@@ -45,10 +51,28 @@ export class UsersService {
       const correctCredentials = await bcrypt.compare(password, user.password);
       if (!correctCredentials)
         return { ok: false, error: 'Credentials invalid' };
-      return { ok: true };
+
+      //Generate a JWT and return it to the use
+      const token = this.jwtService.sign(user.id);
+      return { ok: true, token };
     } catch (error) {
       return { ok: false, error };
     }
-    //Generate a JWT and return it to the use
+  }
+  async findById(id: number): Promise<Users> {
+    return await this.users.findOne({ id });
+  }
+  async editProfile(
+    userId: number,
+    { email, password }: EditProfileInput,
+  ): Promise<Users> {
+    const user = await this.users.findOne({ id: userId });
+    if (email) {
+      user.email = email;
+    }
+    if (password) {
+      user.password = password;
+    }
+    return await this.users.save(user);
   }
 }
